@@ -125,10 +125,10 @@ function fisher -a cmd -d "Fish plugin manager"
                         for file in (string match --entire --regex -- "conf\.d/" $$plugin_files_var)
                             emit (string replace --all --regex -- '^.*/|\.fish$' "" $file)_uninstall
                         end
-                        echo -es "Removing \x1b[1m$plugin\x1b[22m" \n"         "$$plugin_files_var
+                        echo -es "Removing \x1b[1m$plugin\x1b[22m" \n"         "$fisher_path/$$plugin_files_var
                     end
 
-                    command rm -rf $$plugin_files_var
+                    command rm -rf $fisher_path/$$plugin_files_var
                     functions --erase (string match --entire --regex -- "functions/" $$plugin_files_var \
                         | string replace --all --regex -- '^.*/|\.fish$' "")
                     set --erase $plugin_files_var
@@ -143,7 +143,7 @@ function fisher -a cmd -d "Fish plugin manager"
                 set --local source $source_plugins[(contains --index -- "$plugin" $fetch_plugins)]
                 set --local files $source/{functions,conf.d,completions}/*
                 set --local plugin_files_var _fisher_(string escape --style=var $plugin)_files
-                set --query files[1] && set -U $plugin_files_var (string replace $source $fisher_path $files)
+                set --query files[1] && set -U $plugin_files_var (string replace $source/ "" $files)
 
                 for file in (string replace -- $source "" $files)
                     command cp -Rf $source/$file $fisher_path/$file
@@ -151,9 +151,9 @@ function fisher -a cmd -d "Fish plugin manager"
 
                 contains -- $plugin $_fisher_plugins || set -Ua _fisher_plugins $plugin
                 contains -- $plugin $install_plugins && set --local event "install" || set --local event "update"
-                echo -es "Installing \x1b[1m$plugin\x1b[22m" \n"           "$$plugin_files_var
+                echo -es "Installing \x1b[1m$plugin\x1b[22m" \n"           "$fisher_path/$$plugin_files_var
 
-                for file in (string match --entire --regex -- "[functions/|conf\.d/].*fish\$" $$plugin_files_var)
+                for file in (string match --entire --regex -- "[functions/|conf\.d/].*fish\$" $fisher_path/$$plugin_files_var)
                     source $file
                     if string match --quiet --regex -- "conf\.d/" $file
                         emit (string replace --all --regex -- '^.*/|\.fish$' "" $file)_$event
@@ -178,7 +178,11 @@ function fisher -a cmd -d "Fish plugin manager"
     end
 end
 
-## Migrations ##
+# You grok this code with the key of imagination.
+# Beyond it are our migrations—please lower your expectations.
+# You're moving into a section of both horror and wonder, of really bad ideas.
+# You've just crossed over into our technical debt thorn.
+
 if functions --query _fisher_self_update || test -e $__fish_config_dir/fishfile # 3.x
     function _fisher_migrate
         function _fisher_complete
@@ -205,6 +209,13 @@ function _fisher_fish_postexec --on-event fish_postexec
         test -e $XDG_DATA_HOME/fisher && rm -rf $XDG_DATA_HOME/fisher
         functions --erase _fisher_list _fisher_plugin_parse
         set --erase fisher_data
+    else if ! set --query _fisher_init_4_2
+        set --universal _fisher_init_4_2 # Sorry!
+        set --query fisher_path || set --local fisher_path $__fish_config_dir
+        for var in (set --name | string match --entire --regex '^_fisher_.+_files$')
+            set $var (string replace --regex -- \^$fisher_path/ "" $$var)
+        end
     end
+    set --erase _fisher_4_1_migration_done
     functions --erase _fisher_fish_postexec
 end
